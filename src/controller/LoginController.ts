@@ -26,7 +26,6 @@ export const login = async (req: Request, res: Response) => {
     if(!await bcrypt.compare(password, user.password))
     return  res.status(400).send({ message: 'Password incorrect'})
     
-   
     res.send({
       user,
       token: generateToken({ id: user.id})

@@ -1,18 +1,11 @@
 import { Request, Response } from "express";
-import jwt from 'jsonwebtoken'
 
 import { HashManager } from "../services/HashManager";
 import { IdGenerator } from "../services/IdGenerator";
 import User, { IUser } from '../model/User'
+// import { generateToken } from '../services/Authenticator'
+import { Authenticator } from '../services/Authenticator';
 
-const authConfig = require('../config/auth')
-
-
-function generateToken(params = {}) {
-  return jwt.sign(params, authConfig.secret, {
-    expiresIn: 86400
-  })
-}
 
 const UserRegister = User;
 
@@ -35,6 +28,11 @@ export const signUp = async (req: Request, res: Response) => {
     const hashManager = new HashManager();
     const hashPassword = await hashManager.hash(password);
 
+    
+    const authenticator = new Authenticator();
+    const token = authenticator.generateToken({
+      id,
+    });
     await UserRegister.create({
       id: id,
       name,
@@ -42,12 +40,10 @@ export const signUp = async (req: Request, res: Response) => {
       password: hashPassword
     });
     
-  
-
-  res.status(200).send({
+    res.status(200).send({
     message: 'Usuário criado com sucesso',
-    token: generateToken({ id: UserRegister.findById})
-  });
+    token
+    });
 
   }catch(e) {
     res.status(400).send({
