@@ -3,7 +3,7 @@ import cors from 'cors';
 import { AddressInfo } from "net";
 
 import connect from '../src/database/Database';
-import { router } from './router/UserRouter';
+import { router } from './router/router';
 
 const app = express();
 app.use(express.json());
@@ -20,5 +20,5 @@ const server = app.listen(4000 || 4003, () => {
   }
 });
 
-const db = 'mongodb+srv://wdl-db:100295@cluster0.eolip.mongodb.net/register?retryWrites=true&w=majority';
+const db = process.env.MONGO_URI || 'mongodb+srv://wdl-db:100295@cluster0.eolip.mongodb.net/register?retryWrites=true&w=majority';
 connect({db});

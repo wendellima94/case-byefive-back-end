@@ -1,43 +1,209 @@
-import { Request, Response } from 'express';
-import moment from "moment";
+import { Request, response, Response } from 'express';
 
-import { Authenticator } from '../services/Authenticator';
-import { IdGenerator } from '../services/IdGenerator';
-import Post from '../model/Post';
+import PostModel from '../model/PostModel';
+import UserModel from '../model/UserModel';
+import NotificationModel from '../model/NotificationModel';
 
-const CreatePost = Post ;
-
-export const PostController = async (req: Request, res: Response) => {
+export const indexPost = async (req: Request | any, res: Response) => {
   try{
-    const title = req.body.title;
-    const description = req.body.description
+    const { username } = req;
 
-    const authenticator = new Authenticator();
-    const tokenData = authenticator.getData(req.headers.authorization! as string);
+      const user: any = await UserModel.findOne({ username });
 
-    if(!title || !description){
-    throw new Error("invalid")
+      if (!user) {
+        return res.status(400).json({
+          errors: { general: "Usuário não existe" },
+        });
+      }
+
+      const friendsUsernames = user.friends.map((friend: any) => {
+        return friend.username;
+      });
+
+      friendsUsernames.push(username);
+
+      console.log({ friendsUsernames });
+
+      const posts = await PostModel.find({
+        username: { $in: friendsUsernames },
+      });
+
+      console.log(posts);
+
+      res.json(posts);
+    } catch (e) {
+      res.status(404).json({ 
+        errors: { 
+          message: "Não foi possível listar os posts" 
+        } 
+      });
     }
-  
-    const idGenerator = new IdGenerator();
-    const id = idGenerator.generateId();
-    const today = moment().format('YYYY-MM-DD');
+  }
 
-    await CreatePost.create({
-      postId: id,
-      title,
-      description,
-      today
-    })
-   
-    res.status(200).send({
-      message: "Post Criado",
+export const ShowPost = async (req: Request | any, res: Response) => {
+    try {
+      const { id } = req.params;
+      const post = await PostModel.findById(id);
 
+      if(!post) {
+        res.status(400).json({
+          errors : {
+            general: 'Post não existe'
+          }
+        })
+      }
+      res.json(post);
+    } catch (err ) {
+      res.status(404).json({
+        message: 'Não foi possível pegar o post'
+      })
+    }
+  }
 
+export const SearchPost = async (req: Request | any, res: Response) => {
+    try {
+      const { username } = req.params;
+      const posts = await PostModel.find({
+        username,
+      })
+
+      return res.status(200).json(posts);
+    } catch (err) {
+      res.status(404).json({
+        errors: {
+          message: 'Não foi possível listar os posts'
+        }
+      })
+    }
+  }
+
+export const CreatePost = async (req: Request | any, res: Response) => {
+  try{
+    const { id, username } = req;
+    const { caption } = req.body;
+
+    const newPost = new PostModel({
+      user: id, 
+      username,
+      caption: caption !== undefined
+      ? {
+        body: caption,
+      }
+      : {},
+    });
+
+    const post = await newPost.save();
+    req.io.emit('post-created', { post });
+
+    res.status(200).json({
+      post
     });
   } catch (err) {
-    res.status(400).send({
-      message: err.message,
-    });
+    res.status(404).json({
+      errors: {
+        message: 'Não foi possivel postar'
+      }
+    })
+  }
+}
+
+export const DeletePost = async (req: Request | any, res: Response) => {
+  try {
+    const { username } = req;
+    const { id: postId} = req.params;
+
+    const post: any = await PostModel.findById(postId);
+
+    if(!post) {
+      return res.status(400).json({
+        errors: {
+          general: 'Post não existe'
+        }
+      }) 
+    }
+
+    if( username === post.username ) {
+      await post.delete();
+
+      req.io.emit('post-deleted', { post });
+
+      return res.status(200).json({
+        message: 'Post deletado com sucesso'
+      })
+    } else {
+      return res.status(400).json({
+        errors: {
+          general: 'Ação não permitida'
+        }
+      })
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(404).json({
+      errors: {
+        message: 'Não foi possivel deletar o post'
+      }
+    })
+  }
+}
+
+export const PostLike = async (req: Request | any, res: Response) => {
+  try {
+    const { username, name } = req;
+    const { id: postId } = req.params;
+    
+    const post: any = await PostModel.findById(postId);
+
+    if(post) {
+      if(post.likes.find((like: any) => like.username === username)) {
+        post.likes = post.likes.filter(
+          (like: any) => like.username !== username
+        )
+      } else {
+        post.likes.push({
+          username,
+        });
+
+        const notification = await NotificationModel.findOne({
+          username: post.username,
+          postId,
+          notificationType: 'like',
+        });
+
+        if(!notification) {
+          if (post.username !== username){
+            const newNotification = new NotificationModel({
+              username: post.username,
+              postId,
+              body: `${name} curtiu sua postagem!`,
+              notificationType: 'like'
+            });
+
+            const notification = await newNotification.save();
+            req.io.emit('notification', { notification })
+          }
+        }
+      }
+
+      await post.save();
+      req.io.emit('liked-post', { post });
+
+      return res.status(200).json({
+        message: 'Ação realizada com sucesso'
+      });  
+    } else {
+      return res.status(400).json({
+        errors: {
+          general: 'Post não existe'
+        }
+      })
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({
+      errors: {
+        message: 'Não foi possivel realizar a ação'
+      }
+    })
   }
 }

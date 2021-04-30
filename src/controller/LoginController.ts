@@ -1,50 +1,39 @@
 import {Request, Response} from "express";
 
-import jwt from 'jsonwebtoken'
 import * as bcrypt from "bcryptjs";
+import UserModel from "../model/UserModel";
+import { generateToken } from "../services/Authenticator";
 
-import User, { IUser } from '../model/User'
+export const Login = async (req: Request, res: Response) => {
+  try {
+  const { username, password } = req.body;
 
-const authConfig = require('../config/auth')
+  const user: any = await UserModel.findOne({ username });
 
-function generateToken(params = {}) {
-  return jwt.sign(params, authConfig.secret, {
-    expiresIn: 86400
+  if(!user) {
+    return res.status(400).json({ errors: {general: 'Nome de usuário não existe'}});
+  }
+
+  const match = await bcrypt.compare(password, user.password);
+
+  if(!match){
+    res.status(400).json({errors: { general: 'Senha incorreta'}});
+  }
+
+  console.log({ user });
+  const token = generateToken(user);
+  delete user.password;
+  res.status(200).json({
+    user: {
+      ...user._doc,
+      id: user._id,
+    },
+    token
+  });
+} catch (err) {
+  console.log(err);
+  res.status(404).json({
+    errors: { message: 'Não foi possível logar'}
   })
-}
-
-export const login = async (req: Request, res: Response) => {
-  
-    const email = req.body.email;
-    const password = req.body.password;
-
-    const user = await User.findOne({email}).select('+password');
-
-    if(!user)
-    return  res.status(400).send({ message: 'Login incorrect'})
-
-    if(!await bcrypt.compare(password, user.password))
-    return  res.status(400).send({ message: 'Password incorrect'})
-    
-    res.send({
-      user,
-      token: generateToken({ id: user.id})
-    })
-}
-
-    // const hashManager = new HashManager();
-    // const isPasswordCorrect = await hashManager.compare(password, user.password);
-
-    // if(!isPasswordCorrect) {
-    //   throw new Error('Usuário ou senha errados');
-    // }
-
-//     res.status(200).send({
-//       message: 'Usuário logado com sucesso'
-//     })
-//   } catch (e) {
-//     res.status(400).send({
-//       message: e.message
-//     })
-//   }
-// };
+  }
+} 
