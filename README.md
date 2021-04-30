@@ -1,4 +1,4 @@
-# case-byefive-back-end
+# back-end
 back-end da aplicação da bye-five com o gerenciador de pacotes yarn
 
 após o yarn install para instalar as dependecias do projeto 
