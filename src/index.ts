@@ -1,24 +1,40 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from "express";
 import cors from 'cors';
-import { AddressInfo } from "net";
+import "dotenv/config";
+import http from "http";
+import socketio from "socket.io";
 
 import connect from '../src/database/Database';
 import { router } from './router/router';
 
 const app = express();
+
 app.use(express.json());
-app.use(cors())
+app.use(cors());
+app.use(router);
 
-app.use('/user', router)
+const server = http.createServer(app)
+const io = socketio(server);
 
-const server = app.listen(4000 || 4003, () => {
-  if (server) {
-    const address = server.address() as AddressInfo;
-    console.log(`Server is running in http://localhost:${address.port}`);
-  } else {
-    console.error(`Failure upon starting server.`);
-  }
+io.on('connection', (socket) => {
+  const { id } = socket.handshake.query
+
+  socket.on('disconnect', () => {
+    console.log('Usuário se desconectou', id)
+  })
+})
+
+app.use((request: Request | any, response: Response, next: NextFunction) => {
+  request.io = io;
+
+  return next();
 });
 
-const db = process.env.MONGO_URI || 'mongodb+srv://wdl-db:100295@cluster0.eolip.mongodb.net/register?retryWrites=true&w=majority';
+const db = process.env.MONGO_URI as string ;
 connect({db});
+
+const port = process.env.PORT || 3333;
+
+server.listen(port, () => {
+  console.log(`Listening to port ${port}...`);
+});

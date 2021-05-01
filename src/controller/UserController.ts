@@ -39,6 +39,16 @@ export const CreateUser = async (req: Request, res: Response) => {
         },
       });
     }
+    if (confirmPassword === "" ) {
+      return res.status(400).json({
+        errors: 'O campo precisa estar preenchido'
+      })
+    }
+    if(confirmPassword !== password) {
+      return res.status(400).json({
+        errors: 'As senhas não coincidem'
+      })
+    } 
       const passwordHash = await bcrypt.hash(password, 12);
 
       const newUser = new UserModel({
